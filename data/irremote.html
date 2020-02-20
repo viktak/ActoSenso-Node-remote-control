@@ -1,0 +1,236 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+%pageheader%
+<body>
+    <script>
+        function submitButtons(vv) {
+            var myHidden = document.getElementById('clickedAction');
+            myHidden.value = vv;
+
+            var myForm = document.getElementById('IRRemoteForm');
+            myForm.submit();
+        }
+    </script>
+    <div class="container-fluid">
+        <nav class="navbar navbar-default">
+            <div class="container-fluid">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#myNavbar">
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="/">ActoSenso Node</a>
+                </div>
+                <div class="collapse navbar-collapse" id="myNavbar">
+                    <ul class="nav navbar-nav">
+                        <li><a href="/status.html">Status</a></li>
+                        <li><a href="/generalsettings.html">General</a></li>
+                        <li><a href="/networksettings.html">Network</a></li>
+                        <li class="active"><a href="/irremote.html">IR remote</a></li>
+                        <li><a href="/tools.html">Tools</a></li>
+                        <li><a href="/login.html?DISCONNECT=YES">Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="well">
+            IR Remote
+        </div>
+
+        <form id="IRRemoteForm" class="form-horizontal" method="post">
+            <div class="panel panel-default">
+                <div class="panel-heading">IR commands</div>
+                <div class="panel-body">
+                    <input type="hidden" name="clickedAction" id="clickedAction" value="" />
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">Air conditioner</div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnACOn" id="btnACOn" name="btnACOn" onclick="submitButtons('btnACOn');">
+                                        <span class="glyphicon glyphicon-off"></span>
+                                        On
+                                    </button>
+                                </div>
+                                <div class="col-sm-6">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnACOff" id="btnACOff" name="btnACOff" onclick="submitButtons('btnACOff');">
+                                        <span class="glyphicon glyphicon-off"></span>
+                                        Off
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel panel-default">
+                        <div class="panel-heading">Main lights</div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnLights100" id="btnLights100" name="btnLights100" onclick="submitButtons('btnLights100');">On (100%)</button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnLights66" id="btnLights66" name="btnLights66" onclick="submitButtons('btnLights66');">Dimmed (66%)</button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnLights33" id="btnLights33" name="btnLights33" onclick="submitButtons('btnLights33');">Moody (33%)</button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnLights0" id="btnLights0" name="btnLights0" onclick="submitButtons('btnLights0');">Off (0%)</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">TV</div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-sm-12">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVOnOff" id="btnTVOnOff" name="btnTVOnOff" onclick="submitButtons('btnTVOnOff');">
+                                        <span class="glyphicon glyphicon-off"></span>
+                                        On/Off
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVExternalInputSelector" id="btnTVExternalInputSelector" name="btnTVExternalInputSelector" onclick="submitButtons('btnTVExternalInputSelector');">
+                                        <span class="glyphicon glyphicon-log-in"></span>
+                                        Ext
+                                    </button>
+                                </div>
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVGuide" id="btnTVGuide" name="btnTVGuide" onclick="submitButtons('btnTVGuide');">
+                                        <span class="glyphicon glyphicon glyphicon-th-list"></span>
+                                        Guide
+                                    </button>
+                                </div>
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVInfo" id="btnTVInfo" name="btnTVInfo" onclick="submitButtons('btnTVInfo');">
+                                        <span class="glyphicon glyphicon-info-sign"></span>
+                                        Info
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVLeft" id="btnTVLeft" name="btnTVLeft" onclick="submitButtons('btnTVLeft');">
+                                        <span class="glyphicon glyphicon-arrow-left"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVUp" id="btnTVUp" name="btnTVUp" onclick="submitButtons('btnTVUp');">
+                                        <span class="glyphicon glyphicon-arrow-up"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVDown" id="btnTVDown" name="btnTVDown" onclick="submitButtons('btnTVDown');">
+                                        <span class="glyphicon glyphicon-arrow-down"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVRight" id="btnTVRight" name="btnTVRight" onclick="submitButtons('btnTVRight');">
+                                        <span class="glyphicon glyphicon-arrow-right"></span>
+                                    </button>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-6">
+                                        <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVEnter" id="btnTVEnter" name="btnTVEnter" onclick="submitButtons('btnTVEnter');">
+                                            <span class="glyphicon glyphicon-ok"></span>
+                                            OK
+                                        </button>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVReturn" id="btnTVReturn" name="btnTVReturn" onclick="submitButtons('btnTVReturn');">
+                                            <span class="glyphicon glyphicon-remove"></span>
+                                            Esc
+                                        </button>
+                                    </div>
+
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVProgramUp" id="btnTVProgramUp" name="btnTVProgramUp" onclick="submitButtons('btnTVProgramUp');">
+                                        Program
+                                        <span class="glyphicon glyphicon-plus"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-6">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnTVProgramDown" id="btnTVProgramDown" name="btnTVProgramDown" onclick="submitButtons('btnTVProgramDown');">
+                                        Program
+                                        <span class="glyphicon glyphicon-minus"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">Amplifier</div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-sm-12">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierOnOff" id="btnAmplifierOnOff" name="btnAmplifierOnOff" onclick="submitButtons('btnAmplifierOnOff');">
+                                        <span class="glyphicon glyphicon-off"></span>
+                                        On/Off
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierXBOX" id="btnAmplifierXBOX" name="btnAmplifierXBOX" onclick="submitButtons('btnAmplifierXBOX');">
+                                        XBOX
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierHomeTheater" id="btnAmplifierHomeTheater" name="btnAmplifierHomeTheater" onclick="submitButtons('btnAmplifierHomeTheater');">
+                                        Home theater
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierTV" id="btnAmplifierTV" name="btnAmplifierTV" onclick="submitButtons('btnAmplifierTV');">
+                                        TV
+                                    </button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierComputer" id="btnAmplifierComputer" name="btnAmplifierComputer" onclick="submitButtons('btnAmplifierComputer');">
+                                        Computer
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierVolumePlus" id="btnAmplifierVolumePlus" name="btnAmplifierVolumePlus" onclick="submitButtons('btnAmplifierVolumePlus');">
+                                        <span class="glyphicon glyphicon-volume-up"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierVolumeMinus" id="btnAmplifierVolumeMinus" name="btnAmplifierVolumeMinus" onclick="submitButtons('btnAmplifierVolumeMinus');">
+                                        <span class="glyphicon glyphicon-volume-down"></span>
+                                    </button>
+                                </div>
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-default btn-block btn-lg" value="btnAmplifierVolumeMute" id="btnAmplifierVolumeMute" name="btnAmplifierVolumeMute" onclick="submitButtons('btnAmplifierVolumeMute');">
+                                        <span class="glyphicon glyphicon-volume-off"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+</div>
+        </form>
+        <div class="well well-sm">
+            (c)2016-2020 Viktor Takacs - <a href="http://diy.viktak.com" target="_blank">diy.viktak.com</a>
+        </div>
+
+    </div>
+</body>
+</html>
