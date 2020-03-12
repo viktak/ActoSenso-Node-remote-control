@@ -35,7 +35,7 @@ config appConfig;
 // Current connection state
 enum CONNECTION_STATE connectionState;
 
-char defaultSSID[16];
+char defaultSSID[48];
 
 //  Web server
 ESP8266WebServer server(80);
@@ -76,7 +76,7 @@ void LogEvent(int Category, int ID, String Title, String Data){
 
     #ifdef __MQTT
     if (PSclient.connected()){
-      PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + String(ESP.getChipId()) + "/log/", msg ).set_qos(0));
+      PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + String(ESP.getChipId()) + "/log", msg ).set_qos(0));
     }
     #endif
   }
@@ -825,7 +825,7 @@ void SendHeartbeat(){
     String myJsonString;
     root.prettyPrintTo(myJsonString);
 
-    PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + "/espheartbeat/", myJsonString ).set_qos(0));
+    PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + "/HEARTBEAT/", myJsonString ).set_qos(0));
   }
 
   needsHeartbeat = false;
@@ -937,9 +937,6 @@ void setup() {
   Serial.print(ESP.getChipId());
   Serial.println("...");
 
-  sprintf(defaultSSID,"ESP-%lu", ESP.getChipId());
-  WiFi.hostname(defaultSSID);
-
   //  File system
   if (!SPIFFS.begin()){
     Serial.println("Error: Failed to initialize the filesystem!");
@@ -951,6 +948,9 @@ void setup() {
   } else {
     Serial.println("Config loaded.");
   }
+
+  sprintf(defaultSSID, "%s-%u", appConfig.mqttTopic, ESP.getChipId());
+  WiFi.hostname(defaultSSID);
 
   //  GPIOs
 
@@ -1113,7 +1113,7 @@ void loop(){
             digitalWrite(CONNECTION_STATUS_LED_GPIO, HIGH);
             delay(950);
           }
-          if (i == 31) {
+          if (attempt > WIFI_CONNECTION_TIMEOUT) {
             Serial.println();
             Serial.println("Could not connect to WiFi");
             delay(100);
