@@ -55,6 +55,7 @@ char timeout = 30;
 bool isAccessPoint = false;
 bool isAccessPointCreated = false;
 
+WiFiUDP Udp;
 
 // Daylight savings time rules for Greece
 TimeChangeRule myDST = {"MDT", Fourth, Sun, Mar, 2, DST_TIMEZONE_OFFSET * 60};
