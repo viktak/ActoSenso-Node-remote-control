@@ -1105,9 +1105,10 @@ void loop(){
           Serial.printf("Trying to connect to WIFI network: %s", appConfig.ssid);
 
           // Initialize iteration counter
-          int i = 0;
+          // Initialize iteration counter
+          uint8_t attempt = 0;
 
-          while ((WiFi.status() != WL_CONNECTED) && (i++ < 30)) {
+          while ((WiFi.status() != WL_CONNECTED) && (attempt++ < 30)) {
             digitalWrite(CONNECTION_STATUS_LED_GPIO, LOW);
             Serial.print(".");
             delay(50);

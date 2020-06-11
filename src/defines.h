@@ -1,3 +1,6 @@
+#ifndef DEFINES_H
+#define DEFINES_H
+
 #define MQTT_CUSTOMER "viktak"
 #define MQTT_PROJECT  "spiti"
 
@@ -55,3 +58,5 @@
 #define IR_PWM_B_7 0x1067629D
 
 //  TOYOTOMI TAN-A28GW
+
+#endif
