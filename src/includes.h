@@ -19,11 +19,12 @@
 #include <pcf8574_esp.h>
 #include <Wire.h>
 
-#define FS_NO_GLOBALS   //  This is needed for FS.h and SD.h together
-#include <FS.h>
+#include <LittleFS.h>
 
 #include <PubSubClient.h>
+
 #include <EEPROM.h>
+
 #include <IRremoteESP8266.h>
 #include <IRrecv.h>
 #include <IRutils.h>

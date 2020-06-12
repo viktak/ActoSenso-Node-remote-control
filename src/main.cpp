@@ -46,6 +46,7 @@ PubSubClient PSclient(wclient);
 
 //  Timers and their flags
 os_timer_t heartbeatTimer;
+os_timer_t accessPointTimer;
 
 bool needsHeartbeat = false;
 bool ntpInitialized = false;
@@ -54,12 +55,13 @@ bool ntpInitialized = false;
 char timeout = 30;
 bool isAccessPoint = false;
 bool isAccessPointCreated = false;
+TimeChangeRule *tcr;        // Pointer to the time change rule
 
 WiFiUDP Udp;
 
 // Daylight savings time rules for Greece
 TimeChangeRule myDST = {"MDT", Fourth, Sun, Mar, 2, DST_TIMEZONE_OFFSET * 60};
-TimeChangeRule mySTD = {"MST", First,  Sun, Nov, 2,  ST_TIMEZONE_OFFSET * 60};
+TimeChangeRule mySTD = {"MST", Fourth,  Sun, Oct, 2,  ST_TIMEZONE_OFFSET * 60};
 Timezone myTZ(myDST, mySTD);
 
 void LogEvent(int Category, int ID, String Title, String Data){
@@ -75,12 +77,29 @@ void LogEvent(int Category, int ID, String Title, String Data){
 
     Serial.println(msg);
 
-    #ifdef __MQTT
-    if (PSclient.connected()){
-      PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + String(ESP.getChipId()) + "/log", msg ).set_qos(0));
-    }
-    #endif
+    PSclient.publish((MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + appConfig.mqttTopic + "/log").c_str(), msg.c_str(), false);
   }
+}
+
+void SetRandomSeed(){
+    uint32_t seed;
+
+    // random works best with a seed that can use 31 bits
+    // analogRead on a unconnected pin tends toward less than four bits
+    seed = analogRead(0);
+    delay(1);
+
+    for (int shifts = 3; shifts < 31; shifts += 3)
+    {
+        seed ^= analogRead(0) << shifts;
+        delay(1);
+    }
+
+    randomSeed(seed);
+}
+
+void accessPointTimerCallback(void *pArg) {
+  ESP.reset();
 }
 
 void heartbeatTimerCallback(void *pArg) {
@@ -88,7 +107,7 @@ void heartbeatTimerCallback(void *pArg) {
 }
 
 bool loadSettings(config& data) {
-  fs::File configFile = SPIFFS.open("/config.json", "r");
+  File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println("Failed to open config file");
     LogEvent(EVENTCATEGORIES::System, 1, "FS failure", "Failed to open config file.");
@@ -111,58 +130,119 @@ bool loadSettings(config& data) {
   configFile.readBytes(buf.get(), size);
   configFile.close();
 
+  StaticJsonDocument<JSON_SETTINGS_SIZE> doc;
+  DeserializationError error = deserializeJson(doc, buf.get());
 
-  StaticJsonBuffer<SENSORDATA_JSON_SIZE> jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(buf.get());
-
-    if (!root.success()) {
+  if (error) {
     Serial.println("Failed to parse config file");
     LogEvent(EVENTCATEGORIES::System, 3, "FS failure", "Failed to parse config file.");
+    Serial.println(error.c_str());
     return false;
   }
 
   #ifdef __debugSettings
-  root.prettyPrintTo(Serial);
+  serializeJsonPretty(doc,Serial);
+  Serial.println();
   #endif
 
-  strcpy(appConfig.ssid, root["ssid"]);
-  strcpy(appConfig.password, root["password"]);
-  strcpy(appConfig.mqttServer, (const char*)root["mqttServer"]);
-
-  appConfig.mqttPort = root["mqttPort"];
-
-  appConfig.timeZone = root["timezone"];
-
+  if (doc["ssid"]){
+    strcpy(appConfig.ssid, doc["ssid"]);
+  }
+  else
+  {
+    strcpy(appConfig.ssid, defaultSSID);
+  }
+  
+  if (doc["password"]){
+    strcpy(appConfig.password, doc["password"]);
+  }
+  else
+  {
+    strcpy(appConfig.password, DEFAULT_PASSWORD);
+  }
+  
+  if (doc["mqttServer"]){
+    strcpy(appConfig.mqttServer, doc["mqttServer"]);
+  }
+  else
+  {
+    strcpy(appConfig.mqttServer, DEFAULT_MQTT_SERVER);
+  }
+  
+  if (doc["mqttPort"]){
+    appConfig.mqttPort = doc["mqttPort"];
+  }
+  else
+  {
+    appConfig.mqttPort = DEFAULT_MQTT_PORT;
+  }
+  
+  if (doc["mqttTopic"]){
+    strcpy(appConfig.mqttTopic, doc["mqttTopic"]);
+  }
+  else
+  {
+    strcpy(appConfig.mqttTopic, DEFAULT_MQTT_TOPIC);
+  }
+  
+  if (doc["friendlyName"]){
+    strcpy(appConfig.friendlyName, doc["friendlyName"]);
+  }
+  else
+  {
+    strcpy(appConfig.friendlyName, NODE_DEFAULT_FRIENDLY_NAME);
+  }
+  
+  if (doc["timezone"]){
+    appConfig.timeZone = doc["timezone"];
+  }
+  else
+  {
+    appConfig.timeZone = 0;
+  }
+  
+  if (doc["heartbeatInterval"]){
+    appConfig.heartbeatInterval = doc["heartbeatInterval"];
+  }
+  else
+  {
+    appConfig.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+  }
+  
   return true;
 }
 
 bool saveSettings() {
-  StaticJsonBuffer<SENSORDATA_JSON_SIZE> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
+  StaticJsonDocument<1024> doc;
 
-  root["ssid"] = appConfig.ssid;
-  root["password"] = appConfig.password;
+  doc["ssid"] = appConfig.ssid;
+  doc["password"] = appConfig.password;
 
-  root["timezone"] = appConfig.timeZone;
+  doc["heartbeatInterval"] = appConfig.heartbeatInterval;
 
-  root["mqttServer"] = appConfig.mqttServer;
-  root["mqttPort"] = appConfig.mqttPort;
+  doc["timezone"] = appConfig.timeZone;
+
+  doc["mqttServer"] = appConfig.mqttServer;
+  doc["mqttPort"] = appConfig.mqttPort;
+  doc["mqttTopic"] = appConfig.mqttTopic;
+
+  doc["friendlyName"] = appConfig.friendlyName;
+
 
   #ifdef __debugSettings
-  root.prettyPrintTo(Serial);
+  serializeJsonPretty(doc,Serial);
+  Serial.println();
   #endif
 
-  fs::File configFile = SPIFFS.open("/config.json", "w");
+  File configFile = LittleFS.open("/config.json", "w");
   if (!configFile) {
     Serial.println("Failed to open config file for writing");
     LogEvent(System, 4, "FS failure", "Failed to open config file for writing.");
     return false;
   }
-
-  root.printTo(configFile);
+  serializeJson(doc, configFile);
   configFile.close();
 
-  Serial.println("Json size: " + SENSORDATA_JSON_SIZE);
   return true;
 }
 
@@ -177,9 +257,14 @@ void defaultSettings(){
   strcpy(appConfig.mqttServer, "test.mosquitto.org");
   #endif
 
-  appConfig.mqttPort = 1883;
+  appConfig.mqttPort = DEFAULT_MQTT_PORT;
+  strcpy(appConfig.mqttTopic, DEFAULT_MQTT_TOPIC);
 
   appConfig.timeZone = 2;
+
+  strcpy(appConfig.friendlyName, NODE_DEFAULT_FRIENDLY_NAME);
+  appConfig.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+
 
   if (!saveSettings()) {
     Serial.println("Failed to save config");
@@ -297,12 +382,14 @@ void handleLogin(){
     LogEvent(EVENTCATEGORIES::Login, 2, "Failure", "User name: " + server.arg("username") + " - Password: " + server.arg("password"));
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
-  f = SPIFFS.open("/login.html", "r");
+  time_t localTime = myTZ.toLocal(now(), &tcr);
+
+  f = LittleFS.open("/login.html", "r");
 
   String s, htmlString;
 
@@ -310,12 +397,14 @@ void handleLogin(){
     s = f.readStringUntil('\n');
 
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
     if (s.indexOf("%alert%")>-1) s.replace("%alert%", msg);
 
     htmlString+=s;
   }
   f.close();
   server.send(200, "text/html", htmlString);
+  LogEvent(PageHandler, 2, "Page served", "/");
 }
 
 void handleRoot() {
@@ -327,12 +416,14 @@ void handleRoot() {
     return;
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
-  f = SPIFFS.open("/index.html", "r");
+  time_t localTime = myTZ.toLocal(now(), &tcr);
+
+  f = LittleFS.open("/index.html", "r");
 
   String FirmwareVersionString = String(FIRMWARE_VERSION) + " @ " + String(__TIME__) + " - " + String(__DATE__);
 
@@ -342,6 +433,7 @@ void handleRoot() {
     s = f.readStringUntil('\n');
 
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
     if (s.indexOf("%espid%")>-1) s.replace("%espid%", (String)ESP.getChipId());
     if (s.indexOf("%hardwareid%")>-1) s.replace("%hardwareid%", HARDWARE_ID);
     if (s.indexOf("%hardwareversion%")>-1) s.replace("%hardwareversion%", HARDWARE_VERSION);
@@ -352,7 +444,7 @@ void handleRoot() {
   }
   f.close();
   server.send(200, "text/html", htmlString);
-  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page loaded", "/");
+  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page served", "/");
 }
 
 void handleStatus() {
@@ -364,17 +456,16 @@ void handleStatus() {
      return;
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
-  TimeChangeRule *tcr;        // Pointer to the time change rule
-  time_t localTime = myTZ.toLocal(now(), &tcr);;
+  time_t localTime = myTZ.toLocal(now(), &tcr);
 
   String s;
 
-  f = SPIFFS.open("/status.html", "r");
+  f = LittleFS.open("/status.html", "r");
 
   String htmlString, ds18b20list;
 
@@ -383,6 +474,7 @@ void handleStatus() {
 
     //  System information
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
     if (s.indexOf("%chipid%")>-1) s.replace("%chipid%", (String)ESP.getChipId());
     if (s.indexOf("%uptime%")>-1) s.replace("%uptime%", TimeIntervalToString(millis()/1000));
     if (s.indexOf("%currenttime%")>-1) s.replace("%currenttime%", DateTimeToString(localTime));
@@ -391,6 +483,8 @@ void handleStatus() {
     if (s.indexOf("%flashchipspeed%")>-1) s.replace("%flashchipspeed%",String(ESP.getFlashChipSpeed()));
     if (s.indexOf("%freeheapsize%")>-1) s.replace("%freeheapsize%",String(ESP.getFreeHeap()));
     if (s.indexOf("%freesketchspace%")>-1) s.replace("%freesketchspace%",String(ESP.getFreeSketchSpace()));
+    if (s.indexOf("%friendlyname%")>-1) s.replace("%friendlyname%",appConfig.friendlyName);
+    if (s.indexOf("%mqtt-topic%")>-1) s.replace("%mqtt-topic%",appConfig.mqttTopic);
 
     //  Network settings
     switch (WiFi.getMode()) {
@@ -409,7 +503,9 @@ void handleStatus() {
         if (s.indexOf("%ssid%")>-1) s.replace("%ssid%",String(WiFi.SSID()));
         if (s.indexOf("%subnetmask%")>-1) s.replace("%subnetmask%",WiFi.subnetMask().toString());
         if (s.indexOf("%gateway%")>-1) s.replace("%gateway%",WiFi.gatewayIP().toString());
-
+        break;
+      default:
+        //  This should not happen...
         break;
     }
 
@@ -417,7 +513,7 @@ void handleStatus() {
     }
     f.close();
   server.send(200, "text/html", htmlString);
-  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page loaded", "status.html");
+  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page served", "status.html");
 }
 
 void handleGeneralSettings() {
@@ -429,7 +525,7 @@ void handleGeneralSettings() {
      return;
    }
 
-  if (server.method() == 2){  //  POST
+  if (server.method() == HTTP_POST){  //  POST
     bool mqttDirty = false;
 
     if (server.hasArg("timezoneselector")){
@@ -439,6 +535,18 @@ void handleGeneralSettings() {
       adjustTime((appConfig.timeZone - oldTimeZone) * SECS_PER_HOUR);
 
       LogEvent(EVENTCATEGORIES::TimeZoneChange, 1, "New time zone", "UTC " + server.arg("timezoneselector"));
+    }
+
+    if (server.hasArg("friendlyname")){
+      strcpy(appConfig.friendlyName, server.arg("friendlyname").c_str());
+      LogEvent(EVENTCATEGORIES::FriendlyNameChange, 1, "New friendly name", appConfig.friendlyName);
+    }
+
+    if (server.hasArg("heartbeatinterval")){
+      os_timer_disarm(&heartbeatTimer);
+      appConfig.heartbeatInterval = server.arg("heartbeatinterval").toInt();
+      LogEvent(EVENTCATEGORIES::HeartbeatIntervalChange, 1, "New Heartbeat interval", (String)appConfig.heartbeatInterval);
+      os_timer_arm(&heartbeatTimer, appConfig.heartbeatInterval * 1000, true);
     }
 
     //  MQTT settings
@@ -456,20 +564,30 @@ void handleGeneralSettings() {
       LogEvent(EVENTCATEGORIES::MqttParamChange, 2, "New MQTT port", server.arg("mqttport").c_str());
     }
 
-    #ifdef __MQTT
+    if (server.hasArg("mqtttopic")){
+      if ((String)appConfig.mqttTopic != server.arg("mqtttopic"))
+        mqttDirty = true;
+        sprintf(appConfig.mqttTopic, "%s", server.arg("mqtttopic").c_str());
+        LogEvent(EVENTCATEGORIES::MqttParamChange, 1, "New MQTT topic", appConfig.mqttTopic);
+    }
+
+
     if (mqttDirty)
       PSclient.disconnect();
-    #endif
 
     saveSettings();
+    ESP.reset();
+
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
-  f = SPIFFS.open("/generalsettings.html", "r");
+  time_t localTime = myTZ.toLocal(now(), &tcr);
+
+  f = LittleFS.open("/generalsettings.html", "r");
 
   String s, htmlString, timezoneslist;
 
@@ -499,16 +617,20 @@ void handleGeneralSettings() {
     s = f.readStringUntil('\n');
 
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
     if (s.indexOf("%mqtt-servername%")>-1) s.replace("%mqtt-servername%", appConfig.mqttServer);
     if (s.indexOf("%mqtt-port%")>-1) s.replace("%mqtt-port%", String(appConfig.mqttPort));
+    if (s.indexOf("%mqtt-topic%")>-1) s.replace("%mqtt-topic%", appConfig.mqttTopic);
     if (s.indexOf("%timezoneslist%")>-1) s.replace("%timezoneslist%", timezoneslist);
+    if (s.indexOf("%friendlyname%")>-1) s.replace("%friendlyname%", appConfig.friendlyName);
+    if (s.indexOf("%heartbeatinterval%")>-1) s.replace("%heartbeatinterval%", (String)appConfig.heartbeatInterval);
 
     htmlString+=s;
   }
   f.close();
   server.send(200, "text/html", htmlString);
 
-  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page requested", "generalsettings.html");
+  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page served", "generalsettings.html");
 }
 
 void handleNetworkSettings() {
@@ -520,7 +642,7 @@ void handleNetworkSettings() {
      return;
    }
 
-  if (server.method() == 2){  //  POST
+  if (server.method() == HTTP_POST){  //  POST
     if (server.hasArg("ssid")){
       strcpy(appConfig.ssid, server.arg("ssid").c_str());
       strcpy(appConfig.password, server.arg("password").c_str());
@@ -530,15 +652,20 @@ void handleNetworkSettings() {
       connectionState = STATE_CHECK_WIFI_CONNECTION;
       WiFi.disconnect(false);
 
+      ESP.reset();
     }
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
+
   String headerString;
+
   if (f.available()) headerString = f.readString();
   f.close();
 
-  f = SPIFFS.open("/networksettings.html", "r");
+  time_t localTime = myTZ.toLocal(now(), &tcr);
+
+  f = LittleFS.open("/networksettings.html", "r");
   String s, htmlString, wifiList;
 
   byte numberOfNetworks = WiFi.scanNetworks();
@@ -553,13 +680,14 @@ void handleNetworkSettings() {
     s = f.readStringUntil('\n');
 
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
     if (s.indexOf("%wifilist%")>-1) s.replace("%wifilist%", wifiList);
       htmlString+=s;
     }
     f.close();
   server.send(200, "text/html", htmlString);
 
-  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page requested", "networksettings.html");
+  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page served", "networksettings.html");
 }
 
 void handleIRRemote() {
@@ -696,13 +824,13 @@ void handleIRRemote() {
 
   
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
 
-  f = SPIFFS.open("/irremote.html", "r");
+  f = LittleFS.open("/irremote.html", "r");
 
   String s, htmlString, controllerlist, pwmlist;
 
@@ -725,8 +853,7 @@ void handleTools() {
      return;
    }
 
-  if (server.method() == 2){  //  POST
-    bool resetToDefaults = false;
+  if (server.method() == HTTP_POST){  //  POST
 
     if (server.hasArg("reset")){
       LogEvent(EVENTCATEGORIES::Reboot, 1, "Reset", "");
@@ -740,12 +867,14 @@ void handleTools() {
     }
   }
 
-  fs::File f = SPIFFS.open("/pageheader.html", "r");
+  File f = LittleFS.open("/pageheader.html", "r");
   String headerString;
   if (f.available()) headerString = f.readString();
   f.close();
 
-  f = SPIFFS.open("/tools.html", "r");
+  time_t localTime = myTZ.toLocal(now(), &tcr);
+
+  f = LittleFS.open("/tools.html", "r");
 
   String s, htmlString;
 
@@ -753,13 +882,14 @@ void handleTools() {
     s = f.readStringUntil('\n');
 
     if (s.indexOf("%pageheader%")>-1) s.replace("%pageheader%", headerString);
+    if (s.indexOf("%year%")>-1) s.replace("%year%", (String)year(localTime));
 
       htmlString+=s;
     }
     f.close();
   server.send(200, "text/html", htmlString);
 
-  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page requested", "tools.html");
+  LogEvent(EVENTCATEGORIES::PageHandler, 2, "Page served", "tools.html");
 }
 
 /*
@@ -769,32 +899,6 @@ void handleTools() {
       Serial.println(server.arg(i));
     }
 */
-
-void handlePage() {
-
-  if (!is_authenticated()){
-     String header = "HTTP/1.1 301 OK\r\nLocation: /login.html\r\nCache-Control: no-cache\r\n\r\n";
-     server.sendContent(header);
-     return;
-   }
-
-   fs::File f = SPIFFS.open("/pageheader.html", "r");
-   String headerString;
-   if (f.available()) headerString = f.readString();
-   f.close();
-
-   f = SPIFFS.open("/page.html", "r");
-
-   String s, htmlString;
-
-   while (f.available()){
-     s = f.readStringUntil('\n');
-
-       htmlString+=s;
-   }
-   f.close();
-   server.send(200, "text/html", htmlString);
-}
 
 void handleNotFound(){
   String message = "File Not Found\n\n";
@@ -812,21 +916,35 @@ void handleNotFound(){
 }
 
 void SendHeartbeat(){
+
   if (PSclient.connected()){
 
-    StaticJsonBuffer<JSON_OBJECT_SIZE(2)> jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    time_t localTime = myTZ.toLocal(now(), &tcr);
 
-    root["Node"] = ESP.getChipId();
-    root["Freeheap"] = ESP.getFreeHeap();
+    const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(6) + 180;
+    StaticJsonDocument<capacity> doc;
 
-    root.prettyPrintTo(Serial);
+    doc["Time"] = DateTimeToString(localTime);
+    doc["Node"] = ESP.getChipId();
+    doc["Freeheap"] = ESP.getFreeHeap();
+    doc["FriendlyName"] = appConfig.friendlyName;
+    doc["HeartbeatInterval"] = appConfig.heartbeatInterval;
+
+    JsonObject wifiDetails = doc.createNestedObject("Wifi");
+    wifiDetails["SSId"] = String(WiFi.SSID());
+    wifiDetails["MACAddress"] = String(WiFi.macAddress());
+    wifiDetails["IPAddress"] = WiFi.localIP().toString();
+
+    #ifdef __debugSettings
+    serializeJsonPretty(doc,Serial);
     Serial.println();
+    #endif
 
     String myJsonString;
-    root.prettyPrintTo(myJsonString);
 
-    PSclient.publish(MQTT::Publish(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + "/HEARTBEAT/", myJsonString ).set_qos(0));
+    serializeJson(doc, myJsonString);
+
+    PSclient.publish((MQTT_CUSTOMER + String("/") + MQTT_PROJECT + "/" + appConfig.mqttTopic + "/HEARTBEAT").c_str(), myJsonString.c_str(), 0);
   }
 
   needsHeartbeat = false;
@@ -889,57 +1007,72 @@ or
 
 Order of parameters is ignored. Whitespaces/new line characters are ignored.
 */
-void mqtt_callback(const MQTT::Publish& pub) {
+void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 
   Serial.print("Topic:\t\t");
-  Serial.println(pub.topic());
+  Serial.println(topic);
 
   Serial.print("Payload:\t");
-  Serial.println(pub.payload_string());
-
-  StaticJsonBuffer<CONTROL_COMMAND_JSON_SIZE> jsonBuffer;
-
-  char json[pub.payload_len()];
-  strcpy(json, pub.payload_string().c_str());
-
-  JsonObject& root = jsonBuffer.parseObject(json);
-
-  root.printTo(Serial);
+  for (unsigned int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
   Serial.println();
 
-  //  reset
-  if (root.containsKey("reset")){
-    LogEvent(EVENTCATEGORIES::MqttMsg, 1, "Reset", "");
-    defaultSettings();
-    ESP.reset();
-  }
+  StaticJsonDocument<JSON_MQTT_COMMAND_SIZE> doc;
+  DeserializationError error = deserializeJson(doc, payload);
 
-  //  restart
-  if (root.containsKey("restart")){
-    LogEvent(EVENTCATEGORIES::MqttMsg, 2, "Restart", "");
-    ESP.reset();
-  }
-
-  if (!root.success()) {
+  if (error) {
     Serial.println("Failed to parse incoming string.");
+    Serial.println(error.c_str());
     for (size_t i = 0; i < 10; i++) {
       digitalWrite(CONNECTION_STATUS_LED_GPIO, !digitalRead(CONNECTION_STATUS_LED_GPIO));
       delay(50);
     }
     return;
   }
+  else{
+    //  It IS a JSON string
+
+    #ifdef __debugSettings
+    serializeJsonPretty(doc,Serial);
+    Serial.println();
+    #endif
+
+
+    //  reset
+    if (doc.containsKey("reset")){
+      LogEvent(EVENTCATEGORIES::MqttMsg, 1, "Reset", "");
+      defaultSettings();
+      ESP.reset();
+    }
+
+    //  restart
+    if (doc.containsKey("restart")){
+      LogEvent(EVENTCATEGORIES::MqttMsg, 2, "Restart", "");
+      ESP.reset();
+    }
+  }
+
 }
 
 void setup() {
   delay(1); //  Needed for PlatformIO serial monitor
   Serial.begin(115200);
   Serial.setDebugOutput(false);
-  Serial.print("\nBooting node: ");
+  Serial.print("\n\n\n\rBooting node:     ");
   Serial.print(ESP.getChipId());
   Serial.println("...");
 
+  String FirmwareVersionString = String(FIRMWARE_VERSION) + " @ " + String(__TIME__) + " - " + String(__DATE__);
+
+  Serial.println("Hardware ID:      " + (String)HARDWARE_ID);
+  Serial.println("Hardware version: " + (String)HARDWARE_VERSION);
+  Serial.println("Software ID:      " + (String)SOFTWARE_ID);
+  Serial.println("Software version: " + FirmwareVersionString);
+  Serial.println();
+
   //  File system
-  if (!SPIFFS.begin()){
+  if (!LittleFS.begin()){
     Serial.println("Error: Failed to initialize the filesystem!");
   }
 
@@ -980,7 +1113,7 @@ void setup() {
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    if (progress % 5 == 0){
+    if (progress % OTA_BLINKING_RATE == 0){
       if (digitalRead(CONNECTION_STATUS_LED_GPIO)==HIGH)
         digitalWrite(CONNECTION_STATUS_LED_GPIO, LOW);
         else
@@ -1011,6 +1144,7 @@ void setup() {
 
   server.onNotFound(handleNotFound);
 
+  //  Web server
   if (MDNS.begin("esp8266")) {
     Serial.println("MDNS responder started.");
   }
@@ -1029,7 +1163,7 @@ void setup() {
   os_timer_arm(&heartbeatTimer, HEARTBEAT_INTERVAL * 1000, true);
 
   //  Randomizer
-  srand(now());
+  SetRandomSeed();
 
   //  IR
   irrecv.enableIRIn();
@@ -1044,7 +1178,7 @@ void loop(){
 
   if (isAccessPoint){
     if (!isAccessPointCreated){
-      Serial.print(" Could not connect to ");
+      Serial.print("Could not connect to ");
       Serial.print(appConfig.ssid);
       Serial.println("\r\nReverting to Access Point mode.");
 
@@ -1067,6 +1201,14 @@ void loop(){
 
       Serial.print("Access point address:\t");
       Serial.println(myIP);
+
+      Serial.println();
+      Serial.println("Note: The device will reset in 5 minutes.");
+
+
+      os_timer_setfn(&accessPointTimer, accessPointTimerCallback, NULL);
+      os_timer_arm(&accessPointTimer, ACCESS_POINT_TIMEOUT, true);
+      os_timer_disarm(&heartbeatTimer);
     }
     server.handleClient();
   }
@@ -1085,6 +1227,7 @@ void loop(){
           // Wifi is connected so check Internet
           digitalWrite(CONNECTION_STATUS_LED_GPIO, LOW);
           connectionState = STATE_CHECK_INTERNET_CONNECTION;
+
           server.handleClient();
         }
         break;
@@ -1094,7 +1237,9 @@ void loop(){
         {
           // Indicate NTP no yet initialized
           ntpInitialized = false;
+
           digitalWrite(CONNECTION_STATUS_LED_GPIO, HIGH);
+          Serial.printf("Trying to connect to WIFI network: %s", appConfig.ssid);
 
           // Set station mode
           WiFi.mode(WIFI_STA);
@@ -1102,23 +1247,23 @@ void loop(){
           // Start connection process
           WiFi.begin(appConfig.ssid, appConfig.password);
 
-          Serial.printf("Trying to connect to WIFI network: %s", appConfig.ssid);
-
-          // Initialize iteration counter
           // Initialize iteration counter
           uint8_t attempt = 0;
 
-          while ((WiFi.status() != WL_CONNECTED) && (attempt++ < 30)) {
+          while ((WiFi.status() != WL_CONNECTED) && (attempt++ < WIFI_CONNECTION_TIMEOUT)) {
             digitalWrite(CONNECTION_STATUS_LED_GPIO, LOW);
             Serial.print(".");
             delay(50);
             digitalWrite(CONNECTION_STATUS_LED_GPIO, HIGH);
             delay(950);
           }
-          if (attempt > WIFI_CONNECTION_TIMEOUT) {
+          if (attempt >= WIFI_CONNECTION_TIMEOUT) {
             Serial.println();
             Serial.println("Could not connect to WiFi");
             delay(100);
+
+            isAccessPoint=true;
+
             break;
           }
           digitalWrite(CONNECTION_STATUS_LED_GPIO, LOW);
@@ -1155,20 +1300,16 @@ void loop(){
         ArduinoOTA.handle();
 
         if (!PSclient.connected()) {
-          PSclient.set_server(appConfig.mqttServer, appConfig.mqttPort);
+          PSclient.setServer(appConfig.mqttServer, appConfig.mqttPort);
+            String clientId = "ESP8266Client-";
+            clientId += String(random(0xffff), HEX);
 
-          String msg = "{";
-          msg += "\"Node\":" + (String)ESP.getChipId() + ",";
-          msg += "\"Category\":1,";
-          msg += "\"ID\":2,";
-          msg += "\"Title\":\"Node offline\",";
-          msg += "\"Data\":\"";
-          msg += DateTimeToString(now());
-          msg += "\"}";
+          if (PSclient.connect(clientId.c_str(), (MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + appConfig.mqttTopic + "/STATE").c_str(), 0, true, "offline" )){
+            PSclient.setCallback(mqtt_callback);
 
-          if (PSclient.connect("ESP-" + String(ESP.getChipId()), MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + String(ESP.getChipId()) + "/log", 0, false, msg )){
-            PSclient.set_callback(mqtt_callback);
-            PSclient.subscribe(MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + String(ESP.getChipId()) + "/incoming", 0);
+            PSclient.subscribe((MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + appConfig.mqttTopic + "/cmnd").c_str(), 0);
+
+            PSclient.publish((MQTT_CUSTOMER + String("/") + MQTT_PROJECT + String("/") + appConfig.mqttTopic + "/STATE").c_str(), "online", false);
             LogEvent(EVENTCATEGORIES::Conn, 1, "Node online", WiFi.localIP().toString());
           }
         }
