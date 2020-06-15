@@ -182,6 +182,7 @@ bool loadSettings(config& data) {
   }
   else
   {
+    sprintf(defaultSSID, "%s-%u", DEFAULT_MQTT_TOPIC, ESP.getChipId());
     strcpy(appConfig.mqttTopic, defaultSSID);
   }
   
@@ -227,8 +228,6 @@ bool saveSettings() {
   doc["mqttTopic"] = appConfig.mqttTopic;
 
   doc["friendlyName"] = appConfig.friendlyName;
-
-
   #ifdef __debugSettings
   serializeJsonPretty(doc,Serial);
   Serial.println();
@@ -258,6 +257,8 @@ void defaultSettings(){
   #endif
 
   appConfig.mqttPort = DEFAULT_MQTT_PORT;
+
+  sprintf(defaultSSID, "%s-%u", DEFAULT_MQTT_TOPIC, ESP.getChipId());
   strcpy(appConfig.mqttTopic, defaultSSID);
 
   appConfig.timeZone = 2;
@@ -570,7 +571,6 @@ void handleGeneralSettings() {
         sprintf(appConfig.mqttTopic, "%s", server.arg("mqtttopic").c_str());
         LogEvent(EVENTCATEGORIES::MqttParamChange, 1, "New MQTT topic", appConfig.mqttTopic);
     }
-
 
     if (mqttDirty)
       PSclient.disconnect();
@@ -1028,7 +1028,6 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
       digitalWrite(CONNECTION_STATUS_LED_GPIO, !digitalRead(CONNECTION_STATUS_LED_GPIO));
       delay(50);
     }
-    return;
   }
   else{
     //  It IS a JSON string
@@ -1037,7 +1036,6 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     serializeJsonPretty(doc,Serial);
     Serial.println();
     #endif
-
 
     //  reset
     if (doc.containsKey("reset")){
@@ -1083,11 +1081,9 @@ void setup() {
     Serial.println("Config loaded.");
   }
 
-  sprintf(defaultSSID, "%s-%u", appConfig.mqttTopic, ESP.getChipId());
   WiFi.hostname(defaultSSID);
 
   //  GPIOs
-
   //  outputs
   pinMode(CONNECTION_STATUS_LED_GPIO, OUTPUT);
   digitalWrite(CONNECTION_STATUS_LED_GPIO, HIGH);
