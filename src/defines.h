@@ -9,6 +9,8 @@
 #define SOFTWARE_ID "Multimedia Remote "
 #define FIRMWARE_VERSION "1.1"
 
+#define DEBUG_SPEED 921600
+
 #define JSON_SETTINGS_SIZE (JSON_OBJECT_SIZE(10) + 200)
 #define JSON_MQTT_COMMAND_SIZE 300
 
